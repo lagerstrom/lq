@@ -16,30 +16,62 @@ import (
 )
 
 const (
-	colorReset   = "\033[0m"
-	colorKey     = "\033[38;5;212m"
-	colorString  = "\033[38;5;222m"
-	colorNumber  = "\033[38;5;117m"
-	colorBool    = "\033[38;5;117m"
-	colorNull    = "\033[38;5;117m"
-	colorBrace   = "\033[38;5;146m"
-	colorTS      = "\033[38;5;120m"
-	colorLevel   = "\033[38;5;214m"
-	colorSource  = "\033[38;5;153m"
-	colorLineNum = "\033[38;5;103m"
+	colorReset = "\033[0m"
 )
 
 type styler struct {
 	color bool
 	loc   *time.Location
+	theme theme
+}
+
+type theme struct {
+	key     string
+	string  string
+	number  string
+	boolean string
+	null    string
+	brace   string
+	ts      string
+	level   string
+	source  string
+	lineNum string
 }
 
 var version = "dev"
 
 var bracketedLogPattern = regexp.MustCompile(`^\[([^\]]+):\s*([A-Z]+)/([^\]]+)\]\s*(.*)$`)
 
+var themes = map[string]theme{
+	"default": {
+		key:     "\033[38;5;212m",
+		string:  "\033[38;5;222m",
+		number:  "\033[38;5;117m",
+		boolean: "\033[38;5;117m",
+		null:    "\033[38;5;117m",
+		brace:   "\033[38;5;146m",
+		ts:      "\033[38;5;120m",
+		level:   "\033[38;5;214m",
+		source:  "\033[38;5;153m",
+		lineNum: "\033[38;5;103m",
+	},
+	"dracula": {
+		key:     "\033[38;5;141m",
+		string:  "\033[38;5;228m",
+		number:  "\033[38;5;117m",
+		boolean: "\033[38;5;204m",
+		null:    "\033[38;5;61m",
+		brace:   "\033[38;5;61m",
+		ts:      "\033[38;5;84m",
+		level:   "\033[38;5;203m",
+		source:  "\033[38;5;117m",
+		lineNum: "\033[38;5;103m",
+	},
+}
+
 func main() {
 	locationName := flag.String("timezone", "local", "Timezone to use for ts fields, e.g. local, UTC, Europe/Stockholm")
+	themeName := flag.String("theme", "default", "Color theme to use, e.g. default, dracula")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Usage = func() {
 		fmt.Fprint(flag.CommandLine.Output(), usageText())
@@ -51,22 +83,29 @@ func main() {
 		return
 	}
 
+	selectedTheme, err := parseTheme(*themeName)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+
 	location, err := parseLocation(*locationName)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 
-	if err := run(os.Stdin, os.Stdout, location); err != nil {
+	if err := run(os.Stdin, os.Stdout, location, selectedTheme); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(stdin io.Reader, stdout io.Writer, location *time.Location) error {
+func run(stdin io.Reader, stdout io.Writer, location *time.Location, selectedTheme theme) error {
 	s := styler{
 		color: shouldUseColor(stdout),
 		loc:   location,
+		theme: selectedTheme,
 	}
 
 	scanner := bufio.NewScanner(stdin)
@@ -134,14 +173,14 @@ func tryFormatBracketedLog(line string, s styler) (string, bool) {
 	source := strings.TrimSpace(match[3])
 	message := strings.TrimSpace(match[4])
 
-	return s.paint(colorBrace, "[") +
-		s.paint(colorTS, ts.Format("15:04:05.000 02/01/2006 MST")) +
-		s.paint(colorBrace, "] [") +
-		s.paint(colorLevel, level) +
-		s.paint(colorBrace, "/") +
-		s.paint(colorSource, source) +
-		s.paint(colorBrace, "] ") +
-		s.paint(colorString, message), true
+	return s.paint(s.theme.brace, "[") +
+		s.paint(s.theme.ts, ts.Format("15:04:05.000 02/01/2006 MST")) +
+		s.paint(s.theme.brace, "] [") +
+		s.paint(s.theme.level, level) +
+		s.paint(s.theme.brace, "/") +
+		s.paint(s.theme.source, source) +
+		s.paint(s.theme.brace, "] ") +
+		s.paint(s.theme.string, message), true
 }
 
 func renderJSON(value any, indent int, keyName string, s styler) string {
@@ -151,7 +190,7 @@ func renderJSON(value any, indent int, keyName string, s styler) string {
 	switch typed := value.(type) {
 	case map[string]any:
 		if len(typed) == 0 {
-			return s.paint(colorBrace, "{}")
+			return s.paint(s.theme.brace, "{}")
 		}
 
 		keys := make([]string, 0, len(typed))
@@ -162,19 +201,19 @@ func renderJSON(value any, indent int, keyName string, s styler) string {
 
 		lines := make([]string, 0, len(keys))
 		for _, key := range keys {
-			rendered := nextPadding + s.paint(colorKey, strconv.Quote(key)) +
-				s.paint(colorBrace, ": ") +
+			rendered := nextPadding + s.paint(s.theme.key, strconv.Quote(key)) +
+				s.paint(s.theme.brace, ": ") +
 				renderJSON(typed[key], indent+1, key, s)
 			lines = append(lines, rendered)
 		}
 
-		return s.paint(colorBrace, "{") + "\n" +
-			strings.Join(lines, s.paint(colorBrace, ",")+"\n") + "\n" +
-			padding + s.paint(colorBrace, "}")
+		return s.paint(s.theme.brace, "{") + "\n" +
+			strings.Join(lines, s.paint(s.theme.brace, ",")+"\n") + "\n" +
+			padding + s.paint(s.theme.brace, "}")
 
 	case []any:
 		if len(typed) == 0 {
-			return s.paint(colorBrace, "[]")
+			return s.paint(s.theme.brace, "[]")
 		}
 
 		lines := make([]string, 0, len(typed))
@@ -182,12 +221,12 @@ func renderJSON(value any, indent int, keyName string, s styler) string {
 			lines = append(lines, nextPadding+renderJSON(item, indent+1, "", s))
 		}
 
-		return s.paint(colorBrace, "[") + "\n" +
-			strings.Join(lines, s.paint(colorBrace, ",")+"\n") + "\n" +
-			padding + s.paint(colorBrace, "]")
+		return s.paint(s.theme.brace, "[") + "\n" +
+			strings.Join(lines, s.paint(s.theme.brace, ",")+"\n") + "\n" +
+			padding + s.paint(s.theme.brace, "]")
 
 	case string:
-		return s.paint(colorString, strconv.Quote(typed))
+		return s.paint(s.theme.string, strconv.Quote(typed))
 
 	case json.Number:
 		return renderNumber(typed, keyName, s)
@@ -196,10 +235,10 @@ func renderJSON(value any, indent int, keyName string, s styler) string {
 		return renderFloat(typed, keyName, s)
 
 	case bool:
-		return s.paint(colorBool, strconv.FormatBool(typed))
+		return s.paint(s.theme.boolean, strconv.FormatBool(typed))
 
 	case nil:
-		return s.paint(colorNull, "null")
+		return s.paint(s.theme.null, "null")
 
 	default:
 		raw, err := json.Marshal(typed)
@@ -214,20 +253,20 @@ func renderNumber(value json.Number, keyName string, s styler) string {
 	raw := value.String()
 	if keyName == "ts" {
 		if human := formatTimestamp(raw, s.loc); human != "" {
-			return s.paint(colorNumber, raw) + " " + s.paint(colorTS, "("+human+")")
+			return s.paint(s.theme.number, raw) + " " + s.paint(s.theme.ts, "("+human+")")
 		}
 	}
-	return s.paint(colorNumber, raw)
+	return s.paint(s.theme.number, raw)
 }
 
 func renderFloat(value float64, keyName string, s styler) string {
 	raw := strconv.FormatFloat(value, 'f', -1, 64)
 	if keyName == "ts" {
 		if human := formatTimestamp(raw, s.loc); human != "" {
-			return s.paint(colorNumber, raw) + " " + s.paint(colorTS, "("+human+")")
+			return s.paint(s.theme.number, raw) + " " + s.paint(s.theme.ts, "("+human+")")
 		}
 	}
-	return s.paint(colorNumber, raw)
+	return s.paint(s.theme.number, raw)
 }
 
 func formatTimestamp(raw string, location *time.Location) string {
@@ -311,9 +350,18 @@ func parseLocation(name string) (*time.Location, error) {
 	}
 }
 
+func parseTheme(name string) (theme, error) {
+	key := strings.TrimSpace(strings.ToLower(name))
+	selectedTheme, ok := themes[key]
+	if !ok {
+		return theme{}, fmt.Errorf("invalid theme %q", name)
+	}
+	return selectedTheme, nil
+}
+
 func (s styler) renderLineNumber(n int) string {
 	label := fmt.Sprintf("%03d  ", n)
-	return s.paint(colorLineNum, label)
+	return s.paint(s.theme.lineNum, label)
 }
 
 func (s styler) paint(color, text string) string {
@@ -343,6 +391,7 @@ func usageText() string {
 	return `Usage:
   cat app.log | go run ./cmd/lq
   cat app.log | go run ./cmd/lq --timezone UTC
+  cat app.log | go run ./cmd/lq --theme dracula
   journalctl -o cat | go run ./cmd/lq --timezone Europe/Stockholm
 
 Behavior:
@@ -355,6 +404,8 @@ Behavior:
 Flags:
   --timezone string
         Timezone to use for ts fields, e.g. local, UTC, Europe/Stockholm
+  --theme string
+        Color theme to use, e.g. default, dracula
   --version
         Print version and exit
 `

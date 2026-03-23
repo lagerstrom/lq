@@ -14,7 +14,7 @@ func TestRunFormatsJSONAndPassesThroughText(t *testing.T) {
 	var out bytes.Buffer
 	input := strings.NewReader("{\"ts\":1712345678.25,\"b\":1,\"a\":true}\nnot json\n")
 
-	if err := run(input, &out, time.UTC); err != nil {
+	if err := run(input, &out, time.UTC, themes["default"]); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -37,7 +37,7 @@ func TestRunFormatsBracketedLogs(t *testing.T) {
 	var out bytes.Buffer
 	input := strings.NewReader("[2026-03-23 08:14:41,898: INFO/ForkPoolWorker-1] Task seal6.tasks.delete_old_catalog_index_by_cat_id[60558595-a80f-413d-8982-91844d101dde] succeeded in 39.72505997799999s: None\n")
 
-	if err := run(input, &out, time.UTC); err != nil {
+	if err := run(input, &out, time.UTC, themes["default"]); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -123,6 +123,12 @@ func TestUsageTextExamplesMatchCommandPath(t *testing.T) {
 	if !strings.Contains(usage, "go run ./cmd/lq") {
 		t.Fatalf("usage text does not mention correct command path:\n%s", usage)
 	}
+	if !strings.Contains(usage, "--theme") {
+		t.Fatalf("usage text does not mention theme flag:\n%s", usage)
+	}
+	if !strings.Contains(usage, "dracula") {
+		t.Fatalf("usage text does not mention dracula theme:\n%s", usage)
+	}
 	if !strings.Contains(usage, "--version") {
 		t.Fatalf("usage text does not mention version flag:\n%s", usage)
 	}
@@ -131,5 +137,19 @@ func TestUsageTextExamplesMatchCommandPath(t *testing.T) {
 func TestVersionDefault(t *testing.T) {
 	if version == "" {
 		t.Fatal("version should not be empty")
+	}
+}
+
+func TestParseTheme(t *testing.T) {
+	if _, err := parseTheme("dracula"); err != nil {
+		t.Fatalf("expected dracula theme to parse: %v", err)
+	}
+
+	if _, err := parseTheme("DEFAULT"); err != nil {
+		t.Fatalf("expected default theme to parse case-insensitively: %v", err)
+	}
+
+	if _, err := parseTheme("missing"); err == nil {
+		t.Fatal("expected invalid theme to return an error")
 	}
 }

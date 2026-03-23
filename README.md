@@ -52,6 +52,7 @@ lq --help
 ```bash
 cat app.log | lq
 cat app.log | lq --timezone UTC
+cat app.log | lq --theme dracula
 journalctl -o cat | lq --timezone Europe/Stockholm
 ```
 
@@ -75,4 +76,5 @@ go run ./cmd/lq --help
 - Formats bracketed worker logs like `[timestamp: LEVEL/source] message`
 - Passes through non-JSON input unchanged
 - Expands numeric `ts` fields into the selected timezone
+- Supports built-in color themes including `default` and `dracula`
 - Uses the local timezone by default
