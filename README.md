@@ -1,7 +1,7 @@
 # lq
 
 `lq` is a small command-line tool for prettifying line-oriented logs.
-It pretty-prints valid JSON lines, leaves non-JSON lines unchanged, and expands numeric `ts` fields into a human-readable timestamp.
+It pretty-prints valid JSON lines, formats bracketed worker logs, leaves other lines unchanged, and expands numeric `ts` fields into a human-readable timestamp.
 
 ## Requirements
 
@@ -55,6 +55,12 @@ cat app.log | lq --timezone UTC
 journalctl -o cat | lq --timezone Europe/Stockholm
 ```
 
+It also recognizes log lines in formats like:
+
+```text
+[2026-03-23 08:14:41,898: INFO/ForkPoolWorker-1] Task ... succeeded in 39.72s: None
+```
+
 ## Development Run
 
 If you want to run it without installing:
@@ -66,6 +72,7 @@ go run ./cmd/lq --help
 ## Behavior
 
 - Pretty-prints valid JSON lines with ANSI colors when writing to a terminal
+- Formats bracketed worker logs like `[timestamp: LEVEL/source] message`
 - Passes through non-JSON input unchanged
 - Expands numeric `ts` fields into the selected timezone
 - Uses the local timezone by default

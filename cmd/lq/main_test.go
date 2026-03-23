@@ -31,6 +31,22 @@ func TestRunFormatsJSONAndPassesThroughText(t *testing.T) {
 	}
 }
 
+func TestRunFormatsBracketedLogs(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	var out bytes.Buffer
+	input := strings.NewReader("[2026-03-23 08:14:41,898: INFO/ForkPoolWorker-1] Task seal6.tasks.delete_old_catalog_index_by_cat_id[60558595-a80f-413d-8982-91844d101dde] succeeded in 39.72505997799999s: None\n")
+
+	if err := run(input, &out, time.UTC); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	want := "001  [08:14:41.898 23/03/2026 UTC] [INFO/ForkPoolWorker-1] Task seal6.tasks.delete_old_catalog_index_by_cat_id[60558595-a80f-413d-8982-91844d101dde] succeeded in 39.72505997799999s: None\n"
+	if got := out.String(); got != want {
+		t.Fatalf("unexpected output:\n%s", got)
+	}
+}
+
 func TestShouldUseColorRespectsWriterAndNoColor(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	if shouldUseColor(&bytes.Buffer{}) {
@@ -88,6 +104,17 @@ func TestFormatTimestampRejectsInvalidValues(t *testing.T) {
 				t.Fatalf("formatTimestamp(%q) = %q, want empty string", raw, got)
 			}
 		})
+	}
+}
+
+func TestParseBracketedTimestamp(t *testing.T) {
+	got, ok := parseBracketedTimestamp("2026-03-23 08:14:41,898", time.UTC)
+	if !ok {
+		t.Fatal("expected bracketed timestamp to parse")
+	}
+
+	if want := "08:14:41.898 23/03/2026 UTC"; got.Format("15:04:05.000 02/01/2006 MST") != want {
+		t.Fatalf("unexpected parsed timestamp: %s", got.Format("15:04:05.000 02/01/2006 MST"))
 	}
 }
 

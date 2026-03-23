@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,8 @@ const (
 	colorNull    = "\033[38;5;117m"
 	colorBrace   = "\033[38;5;146m"
 	colorTS      = "\033[38;5;120m"
+	colorLevel   = "\033[38;5;214m"
+	colorSource  = "\033[38;5;153m"
 	colorLineNum = "\033[38;5;103m"
 )
 
@@ -32,6 +35,8 @@ type styler struct {
 }
 
 var version = "dev"
+
+var bracketedLogPattern = regexp.MustCompile(`^\[([^\]]+):\s*([A-Z]+)/([^\]]+)\]\s*(.*)$`)
 
 func main() {
 	locationName := flag.String("timezone", "local", "Timezone to use for ts fields, e.g. local, UTC, Europe/Stockholm")
@@ -78,6 +83,12 @@ func run(stdin io.Reader, stdout io.Writer, location *time.Location) error {
 				}
 				continue
 			}
+
+			if formatted, ok := tryFormatBracketedLog(trimmed, s); ok {
+				fmt.Fprintln(stdout, s.renderLineNumber(lineNumber)+formatted)
+				lineNumber++
+				continue
+			}
 		}
 
 		fmt.Fprintln(stdout, s.renderLineNumber(lineNumber)+line)
@@ -106,6 +117,26 @@ func tryFormatJSON(line string, s styler) (string, bool) {
 	}
 
 	return renderJSON(value, 0, "", s), true
+}
+
+func tryFormatBracketedLog(line string, s styler) (string, bool) {
+	match := bracketedLogPattern.FindStringSubmatch(line)
+	if match == nil {
+		return "", false
+	}
+
+	ts, ok := parseBracketedTimestamp(match[1], s.loc)
+	if !ok {
+		return "", false
+	}
+
+	level := strings.TrimSpace(match[2])
+	source := strings.TrimSpace(match[3])
+	message := strings.TrimSpace(match[4])
+
+	return "[" + s.paint(colorTS, ts.Format("15:04:05.000 02/01/2006 MST")) + "] " +
+		"[" + s.paint(colorLevel, level) + "/" + s.paint(colorSource, source) + "] " +
+		message, true
 }
 
 func renderJSON(value any, indent int, keyName string, s styler) string {
@@ -233,6 +264,14 @@ func parseTimestamp(raw string, location *time.Location) (time.Time, bool) {
 	return unixFromNanoseconds(totalNanos, location)
 }
 
+func parseBracketedTimestamp(raw string, location *time.Location) (time.Time, bool) {
+	ts, err := time.ParseInLocation("2006-01-02 15:04:05,000", strings.TrimSpace(raw), location)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return ts.In(location), true
+}
+
 func parseInteger(raw string) (*big.Int, bool) {
 	value := new(big.Int)
 	if _, ok := value.SetString(raw, 10); !ok {
@@ -303,6 +342,7 @@ func usageText() string {
 
 Behavior:
   - Pretty-prints valid JSON lines with ANSI colors.
+  - Normalizes bracketed worker logs like [ts: LEVEL/source] message.
   - Passes through non-JSON input unchanged.
   - Expands numeric ts fields into the selected timezone.
   - Default timezone is local.
