@@ -134,9 +134,14 @@ func tryFormatBracketedLog(line string, s styler) (string, bool) {
 	source := strings.TrimSpace(match[3])
 	message := strings.TrimSpace(match[4])
 
-	return "[" + s.paint(colorTS, ts.Format("15:04:05.000 02/01/2006 MST")) + "] " +
-		"[" + s.paint(colorLevel, level) + "/" + s.paint(colorSource, source) + "] " +
-		message, true
+	return s.paint(colorBrace, "[") +
+		s.paint(colorTS, ts.Format("15:04:05.000 02/01/2006 MST")) +
+		s.paint(colorBrace, "] [") +
+		s.paint(colorLevel, level) +
+		s.paint(colorBrace, "/") +
+		s.paint(colorSource, source) +
+		s.paint(colorBrace, "] ") +
+		s.paint(colorString, message), true
 }
 
 func renderJSON(value any, indent int, keyName string, s styler) string {
